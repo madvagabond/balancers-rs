@@ -1,11 +1,16 @@
+extern crate rand;
+
+
 use std::sync::*;
 use std::collections::VecDeque;
 use std::convert::From;
 
+use std::sync::atomic::{Ordering, AtomicUsize};
+use rand::prelude::*;
 
 
 
-trait Sharder {
+pub trait Sharder {
   type Item;
   type Key;
 
@@ -14,14 +19,14 @@ trait Sharder {
 
 
 
-trait Distributor {
+pub trait Distributor {
   type Item;
   fn pick(&mut self) -> Option<Self::Item>;
 }
 
 
 
-trait Completeable {
+pub trait Completeable {
   type Item;
   fn done(&self, Self::Item);
 }
@@ -94,8 +99,22 @@ impl<T: Clone + PartialEq> RoundRobin<T> {
   }
 
   
-  
+  pub fn list_nodes(&self) -> Vec<T> {
+    let nodes = self.nodes.lock().unwrap();
+    nodes.clone().into_iter().collect()
+  } 
+
+
 }
+
+
+
+
+
+
+
+
+
 
 
 
@@ -130,6 +149,120 @@ impl <T: Clone + PartialEq> Distributor for RoundRobin<T> {
 
 
 
+
+pub struct Loaded<T> {
+  pub inner: T,
+  pub load: AtomicUsize
+}
+
+
+impl<T> Loaded<T> {
+  fn new(inner: T) -> Self {
+    let load = AtomicUsize::new(0);
+    Loaded {load, inner}
+  }
+}
+
+
+
+
+
+struct P2C<T> {
+  nodes: Arc<RwLock< Vec<Loaded<T> > > >
+}
+
+
+impl <T: Clone> Distributor for P2C<T> {
+  type Item = T;
+
+
+  
+  fn pick(&mut self) -> Option<Self::Item> {
+
+    let mut rng = thread_rng();
+    let nodes = self.nodes.read().unwrap();
+    
+    let (i1, i2) = (
+      rng.gen_range(0, nodes.len()), rng.gen_range(0, nodes.len())
+    );
+
+    let (a, b) = (nodes.get(i1).unwrap(), nodes.get(i2).unwrap() );
+
+
+    if a.load.load(Ordering::SeqCst) <= b.load.load(Ordering::SeqCst)  {
+      a.load.fetch_add(1,Ordering::SeqCst);
+      Some( a.inner.to_owned() )
+    }
+
+    else {
+      b.load.fetch_add(1,Ordering::SeqCst);
+      Some(b.inner.to_owned() )
+    }
+
+
+    
+  }
+
+
+  
+}
+
+
+impl <T> From <Vec<T>> for P2C<T> {
+  fn from(v: Vec<T>) -> P2C<T> {
+
+    let loaded = v.into_iter().map(|t| Loaded::new(t) ).collect();
+    let locked = RwLock::new(loaded);
+    let nodes = Arc::new(locked);
+    P2C {nodes} 
+  }
+
+  
+}
+
+
+
+
+impl<T: Clone + PartialEq > P2C<T> {
+
+
+  fn new() -> P2C<T> {
+    Self::from(vec![])
+  }
+
+
+  fn add_node(&mut self, node: T) {
+    let mut nodes = self.nodes.write().unwrap();
+    let loaded = Loaded::new(node);
+    nodes.push(loaded);
+  }
+
+
+  fn remove_node(&mut self, node: T) {
+    let mut nodes = self.nodes.write().unwrap() ;
+    let result = nodes.iter().position(|x| x.inner == node);
+    
+    match result {
+      Some(i) => Some( nodes.remove(i) ),
+      None => None
+    };
+    
+  }
+
+
+  pub fn add_nodes(&mut self, hosts: Vec<T>) {
+    let mut inner = self.nodes.write().unwrap();
+    let mut add = hosts.into_iter().map(|x| Loaded::new(x) ).collect();
+    inner.append(&mut add)
+  }
+
+
+  pub fn remove_nodes(&self, hosts: Vec<T>) {
+    let mut nodes = self.nodes.write().unwrap();
+    nodes.retain(|n| hosts.contains(&n.inner) == false );
+  }
+  
+}
 
 
 #[cfg(test)]
