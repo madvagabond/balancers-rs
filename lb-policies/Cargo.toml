@@ -1,0 +1,6 @@
+[package]
+name = "lb-policies"
+version = "0.1.0"
+authors = ["sam <flatmapds@gmail.com>"]
+
+[dependencies]

@@ -1,0 +1,6 @@
+[package]
+name = "balancers"
+version = "0.1.0"
+authors = ["sam <nullvoidnil@mail.com>"]
+
+[dependencies]
