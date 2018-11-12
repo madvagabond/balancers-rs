@@ -5,3 +5,4 @@ authors = ["sam <flatmapds@gmail.com>"]
 
 [dependencies]
 rand = "0.5"
+futures = "0.1.25"

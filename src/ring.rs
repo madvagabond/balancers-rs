@@ -3,6 +3,12 @@ use super::*;
 
 use std::hash::{Hash, Hasher};
 
+use p2c::*;
+use futures::future;
+use futures::future::JoinAll;
+
+
+/*
 
 struct CHash<T: Hash + Eq + Clone> {
   inner: Arc<RwLock < Vec<T> > >,
@@ -52,26 +58,44 @@ impl<T: Hash + Eq + Clone> Sharder for CHash<T> {
 
 
 
+*/
 
 
 
 
-
-pub struct CHashLL<T> {
-  inner: Arc<RwLock< Vec<Loaded<T> >>  >,
+pub struct CHashLL<T: WeightedNode + Clone> {
+  inner: MemberList<T>,
   factor: usize
 }
 
 
 
 
+impl <W: WeightedNode + Clone> From <Vec<W::Item>> for CHashLL<W> {
+  
+  fn from(v: Vec<W::Item>) -> CHashLL<W> {
 
-impl<T: PartialEq + Clone> Sharder for CHashLL<T> {
-  type Key = u64;
-  type Item = T;
+    let loaded = v.into_iter().map(|inner| {
+     W::new(inner)
+    }).collect();
+    
+    let locked = RwLock::new(loaded);
+    let inner = Arc::new(locked);
+    CHashLL {inner, factor: 3} 
+  }
 
-  fn pick(&self, key: Self::Key) -> Option<Self::Item> {
+  
+}
 
+
+
+
+
+impl <W: WeightedNode + Clone>  CHashLL<W> {
+
+  
+  fn pick(&self, key: u64) -> Option<W> {
+    
     let inner = self.inner.read().unwrap();
 
     let l = inner.len() as i64;
@@ -80,23 +104,61 @@ impl<T: PartialEq + Clone> Sharder for CHashLL<T> {
     let clock_wise = circular::take_clockwise(&inner, i, self.factor);
 
     let res = clock_wise.iter().min_by(|x, y|  x.load().cmp(&y.load() ) );
-    res.map(|x| x.clone().inner )
-      
+    res.map(|x| x.clone())
   }
 
 
 
-  fn pick_n(&self, key: Self::Key, n: usize) -> Vec<Self::Item> {
+  
+  fn pick_n(&self, key: u64, n: usize) -> Vec<W> {
 
     let inner = self.inner.read().unwrap();
 
     let l = inner.len() as i64;
     let i = jump_hash(key, l) as usize;
-    circular::take_clockwise(&inner, i, n).iter().map(|x| x.inner.clone() ).collect()
+    circular::take_clockwise(&inner, i, n)
   }
 
 
+
+  pub fn dispatch<F, RV>(&self, key: u64, fun: F) -> Dispatch<W, RV> 
+  where
+    RV: Future + Sized,
+    F: Fn(&W::Item) -> RV
+  {
+
+    let n = self.pick(key).unwrap();
+    Dispatch::make(n.clone(), fun(&n.inner()) )
+
+    
+  }
+
+
+  pub fn replicate<F, RV>(&self, key: u64, fun: F) -> JoinAll< Vec<Dispatch<W, RV>  > >
+  where
+    RV: Future + Sized,
+    F: Fn(&W::Item) -> RV
+
+  {
+
+
+    let f = |x: W| {
+      let n = x.inner(); 
+      Dispatch::make(x, fun(&n) )
+    };
+
+    let replicas = self.pick_n(key, self.factor).into_iter().map( |x| f(x) ).collect();
+    future::join_all(replicas)
+  }
+
+
+  
+
+  
+  
+  
 }
+
 
 
 
