@@ -3,10 +3,14 @@ use super::*;
 use round_robin::*;
 use p2c::*;
 use std::iter::Iterator;
-
+use ring::*;
+use std::collections::hash_map::DefaultHasher;
 
 pub trait ServerSet<T>: From<Vec<T>> {
-  fn new() -> Self;
+  fn new() -> Self {
+    Self::from(vec![])
+  }
+
   
   fn add(&self, node: T);
   fn remove(&self, node: T);
@@ -17,7 +21,6 @@ pub trait ServerSet<T>: From<Vec<T>> {
 
   fn resolve(&self, v: Vec<T>);
 }
-
 
 
 
@@ -43,10 +46,6 @@ impl <T: Clone + PartialEq> From<Vec<T>> for RoundRobin<T> {
 
 impl <T: Clone + PartialEq> ServerSet<T> for RoundRobin<T> {
   
-  fn new() -> RoundRobin<T> {
-    Self::from(vec![])
-  }
-
 
   fn add(&self, host: T) {
     let mut nodes = self.inner.write().unwrap();
@@ -107,14 +106,11 @@ impl <T: Clone + PartialEq> ServerSet<T> for RoundRobin<T> {
 
 
 impl <W> ServerSet<W::Item> for P2C<W>
-where W : WeightedNode + Clone,
-W::Item: Clone
+where
+  W : WeightedNode + Clone
 {
   
 
-  fn new() -> P2C<W> {
-    Self::from(vec![])
-  }
 
 
 
@@ -189,3 +185,97 @@ W::Item: Clone
 
   
 }
+
+
+
+
+
+
+
+
+impl<T: Clone + PartialEq + Ord> From<Vec<T>> for CHash<T> {
+  fn from(v: Vec<T>) -> CHash<T> {
+    let mut v1 = v.clone();
+    v1.sort();
+    let locked = RwLock::new(v1);
+    let inner = Arc::new(locked); 
+    CHash{inner}
+  }
+} 
+
+
+
+
+
+
+impl <T: Clone + PartialEq + Ord> ServerSet<T> for CHash<T> {
+
+
+  fn add(&self, node: T) {
+    let mut nodes = self.inner.write().unwrap();
+    
+    nodes.push(node);
+
+    nodes.sort()
+
+  }
+  
+
+  
+  fn remove(&self, host: T) {
+    let mut nodes = self.inner.write().unwrap();
+
+    let pos = nodes.iter().position(|x| x == &host);
+    match pos {
+
+      Some(x) => {
+        nodes.remove(x);
+        ()
+      }
+      
+      None => ()
+    };
+
+    nodes.sort()
+  }
+
+
+
+
+
+
+  fn remove_nodes(&self, hosts: Vec<T>) {
+    let mut nodes = self.inner.write().unwrap();
+    nodes.retain(|n| hosts.contains(n) == false );
+    nodes.sort();
+  }
+
+
+
+  fn add_nodes(&self, hosts: Vec<T>) {
+    let mut nodes = self.inner.write().unwrap();
+   
+    nodes.extend(hosts);
+    nodes.sort()
+  }
+
+  
+  fn list(&self) -> Vec<T> {
+    let nodes = self.inner.read().unwrap();
+    nodes.clone().into_iter().collect()
+  } 
+
+
+  fn resolve(&self, v: Vec<T>) {
+    let mut v1 = v;
+    v1.sort(); 
+    *self.inner.write().unwrap() = v1;
+   
+  }
+
+
+  
+}
+
+
+

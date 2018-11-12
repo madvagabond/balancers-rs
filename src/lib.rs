@@ -7,6 +7,7 @@ use std::time::*;
 use std::sync::*;
 use std::sync::atomic::*;
 use futures::prelude::*;
+use std::hash::{Hash, Hasher};
 
 mod server_sets;
 pub mod ring;

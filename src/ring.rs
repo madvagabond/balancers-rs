@@ -1,24 +1,24 @@
 use super::*; 
 
 
-use std::hash::{Hash, Hasher};
+
 
 use p2c::*;
 use futures::future;
 use futures::future::JoinAll;
 
 
-/*
 
-struct CHash<T: Hash + Eq + Clone> {
-  inner: Arc<RwLock < Vec<T> > >,
+
+pub struct CHash<T: PartialEq + Ord + Clone> {
+  pub inner: Arc<RwLock < Vec<T> > >,
 }
 
 
 
 
 
-
+/*
 
 impl<T: Hash + Eq + Clone> Sharder for CHash<T> {
   type Item = T;
@@ -55,10 +55,9 @@ impl<T: Hash + Eq + Clone> Sharder for CHash<T> {
 
 
 
-
-
-
 */
+
+
 
 
 
