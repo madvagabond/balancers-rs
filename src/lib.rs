@@ -8,7 +8,7 @@ use std::sync::*;
 use std::sync::atomic::*;
 use futures::prelude::*;
 
-mod server_sets;
+pub mod server_sets;
 pub mod ring;
 pub mod p2c;
 pub mod round_robin;

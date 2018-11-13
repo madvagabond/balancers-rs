@@ -15,6 +15,14 @@ pub struct CHash<T: PartialEq + Ord + Clone> {
 
 
 
+pub struct CHashLL<T: WeightedNode + Clone> {
+  pub inner: MemberList<T>,
+  pub factor: usize
+}
+
+
+
+
 impl <T: PartialEq + Ord + Clone> CHash<T> {
     
   fn pick(&self, key: u64) -> Option<T> {
@@ -63,69 +71,8 @@ impl <T: PartialEq + Ord + Clone> CHash<T> {
     let replicas = self.pick_n(key, factor).iter().map( |x| fun(&x) ).collect();
     future::join_all(replicas)
   }
-
-  
-  
-  
-
-
   
 } 
-
-
-
-
-/*
-
-impl<T: Hash + Eq + Clone> Sharder for CHash<T> {
-  type Item = T;
-  type Key = u64;
-  
-  fn pick(&self, key: Self::Key) -> Option<Self::Item> {
-
-    let inner = self.inner.read().unwrap();
-
-    let l = inner.len() as i64;
-    let i = jump_hash(key, l) as usize;
-    
-    match inner.iter().nth(i) {
-      Some(r) => Some( r.clone() ),
-      None => None
-    }
-
-
-    
-  }
-
-
-  fn pick_n(&self, key: Self::Key, n: usize) -> Vec<Self::Item>  {
-    let inner = self.inner.read().unwrap();
-
-    let l = inner.len() as i64;
-    let i = jump_hash(key, l) as usize;
-
-    circular::take_clockwise(&inner, i, n)
-  }
-
-}
-
-
-
-
-*/
-
-
-
-
-
-
-pub struct CHashLL<T: WeightedNode + Clone> {
-  pub inner: MemberList<T>,
-  pub factor: usize
-}
-
-
-
 
 
 

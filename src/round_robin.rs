@@ -14,12 +14,19 @@ pub struct RoundRobin<T: Clone + PartialEq> {
 
 
 
-impl<T: Clone + PartialEq> RoundRobin<T> {
+
+
+
+
+
+impl  <T: Clone + PartialEq> RoundRobin<T> {
 
   fn index(&self) -> usize {
     self.index.load(Ordering::SeqCst)
   }
 
+
+  
 
   fn next(&self) {
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -37,30 +44,13 @@ impl<T: Clone + PartialEq> RoundRobin<T> {
         Err(x) => old = x,
       }
     }
-    
-  } 
+  }
+
+
 
 
   
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-impl <T: Clone + PartialEq> Sampler for RoundRobin<T> {
-  type Item = T; 
-
-
-  fn pick(&self) -> Option<Self::Item> {
+  fn pick(&self) -> T {
 
 
     let inner = self.inner.read().unwrap();
@@ -68,12 +58,22 @@ impl <T: Clone + PartialEq> Sampler for RoundRobin<T> {
 
     let n = inner[i].clone();
     self.next();
-    
-    Some(n)
+    n
   }
 
+
+
+  
+  
+  pub fn dispatch<F, RV>(&self, fun: F) -> RV
+  where
+    RV: Future,
+    F: Fn(&T) -> RV
+  {
+    fun( &self.pick() )
+  }
+
+
+
+  
 }
-
-
-
-
