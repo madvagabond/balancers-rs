@@ -9,11 +9,68 @@ use futures::future::JoinAll;
 
 
 
-
 pub struct CHash<T: PartialEq + Ord + Clone> {
   pub inner: Arc<RwLock < Vec<T> > >,
 }
 
+
+
+impl <T: PartialEq + Ord + Clone> CHash<T> {
+    
+  fn pick(&self, key: u64) -> Option<T> {
+
+    let inner = self.inner.read().unwrap();
+
+    let l = inner.len() as i64;
+    let i = jump_hash(key, l) as usize;
+    
+    match inner.iter().nth(i) {
+      Some(r) => Some( r.clone() ),
+      None => None
+    }
+
+
+    
+  }
+
+
+  fn pick_n(&self, key: u64, n: usize) -> Vec<T>  {
+    let inner = self.inner.read().unwrap();
+
+    let l = inner.len() as i64;
+    let i = jump_hash(key, l) as usize;
+
+    circular::take_clockwise(&inner, i, n)
+  }
+
+
+
+  pub fn dispatch<F, RV>(&self, key: u64, fun: F) -> RV
+    where RV: Future + Sized,
+    F: Fn(&T) -> RV
+  {
+    let n = self.pick(key).unwrap();
+    fun(&n)
+  }
+
+
+
+  pub fn replicate<F, RV>(&self, key: u64, factor: usize, fun: F) -> JoinAll< Vec<RV> >
+  where
+    RV: Future + Sized,
+    F: Fn(&T) -> RV
+  {
+    let replicas = self.pick_n(key, factor).iter().map( |x| fun(&x) ).collect();
+    future::join_all(replicas)
+  }
+
+  
+  
+  
+
+
+  
+} 
 
 
 
@@ -140,6 +197,8 @@ impl <W: WeightedNode + Clone>  CHashLL<W> {
   
   
 }
+
+
 
 
 

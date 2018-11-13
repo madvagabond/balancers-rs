@@ -39,11 +39,6 @@ impl <T: Clone + PartialEq> From<Vec<T>> for RoundRobin<T> {
 
 
 
-
-
-
-
-
 impl <T: Clone + PartialEq> ServerSet<T> for RoundRobin<T> {
   
 
