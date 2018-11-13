@@ -63,28 +63,11 @@ impl<T: Hash + Eq + Clone> Sharder for CHash<T> {
 
 
 pub struct CHashLL<T: WeightedNode + Clone> {
-  inner: MemberList<T>,
-  factor: usize
+  pub inner: MemberList<T>,
+  pub factor: usize
 }
 
 
-
-
-impl <W: WeightedNode + Clone> From <Vec<W::Item>> for CHashLL<W> {
-  
-  fn from(v: Vec<W::Item>) -> CHashLL<W> {
-
-    let loaded = v.into_iter().map(|inner| {
-     W::new(inner)
-    }).collect();
-    
-    let locked = RwLock::new(loaded);
-    let inner = Arc::new(locked);
-    CHashLL {inner, factor: 3} 
-  }
-
-  
-}
 
 
 
