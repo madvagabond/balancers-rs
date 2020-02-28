@@ -9,7 +9,7 @@ pub mod load;
 
 pub mod p2c;
 pub mod chash; 
-
+pub mod round_robin; 
 
 pub trait Balancer {
   type Node;

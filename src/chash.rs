@@ -51,7 +51,7 @@ impl <T, L> Ring <T, L> where T: Node, L: Load {
 
   pub fn get_node(&self, key: &[u8]) -> &WeightedNode<T, L> {
     let i = self.hash(key);
-    &self.servers.list()[i]
+    &self.servers.list()[i] 
   }
 
 
@@ -89,7 +89,7 @@ impl <T: Node> KeyedBalancer for Consistent<T> {
   type Node = WeightedNode<T, ()>;
   type Servers = ServerList<T, ()>;
 
-  fn balance(&self, key: &[u8]) -> Self::Node {
+  fn balance(&self, key: &[u8]) -> &Self::Node {
     self.ring.get_node(key)
   }
 
@@ -99,7 +99,7 @@ impl <T: Node> KeyedBalancer for Consistent<T> {
   }
 
   fn servers_mut(&mut self) -> &mut Self::Servers {
-    &mut self.ring
+    &mut self.ring.servers
   }
   
 }
@@ -107,11 +107,11 @@ impl <T: Node> KeyedBalancer for Consistent<T> {
 
 
 impl <T: Node, L: Load> KeyedBalancer for Bounded <T, L> {
-  type Node = WeightedNode<T, ()>;
-  type Servers = ServerList<T, ()>;
+  type Node = WeightedNode<T, L>;
+  type Servers = ServerList<T, L>;
 
-  fn balance(&self, key: &[u8]) -> Self::Node {
-    self.ring.get_node(key)
+  fn balance(&self, key: &[u8]) -> &Self::Node {
+    self.ring.least_loaded(key)
   }
 
 
@@ -120,7 +120,7 @@ impl <T: Node, L: Load> KeyedBalancer for Bounded <T, L> {
   }
 
   fn servers_mut(&mut self) -> &mut Self::Servers {
-    &mut self.ring
+    &mut self.ring.servers
   }
   
 }
