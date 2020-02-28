@@ -1,127 +1,122 @@
 use super::*;
-
 use rand::prelude::*;
 
+use metrohash::*;
+use twox_hash::*;
+use std::hash::Hasher;
 
 
-pub type MemberList<T> = Arc< RwLock< Vec<T>  >>;
+use crate::server_list::*;
+use crate::node::*;
+use crate::load::*;
 
 
-pub struct Dispatch<W: WeightedNode, F: Future> {
-  load: i64,
-  node: W, 
-  future: F 
+
+
+pub struct P2C<T, L> where T: Node, L: Load  {
+  servers: ServerList<T, L>
 }
 
 
-impl <W: WeightedNode, F: Future> Future for Dispatch<W, F> {
-  type Item = F::Item;
-  type Error = F::Error;
 
-  
-  fn poll(&mut self) ->  Result<Async<Self::Item>, Self::Error> {
+impl <T, L> P2C <T, L> where T: Node, L: Load {
 
-    match self.future.poll() {
-      Ok(Async::Ready(t)) => {
-        self.node.end(self.load);
-        Ok( Async::Ready(t) )
-      },
+    
+    fn hash(&self, mut hasher: impl Hasher, key: &[u8]) -> &WeightedNode<T, L> {
+      let servers = self.servers.list();
 
-      Ok(Async::NotReady) => Ok(Async::NotReady), 
-
-      Err(e) => {
-        self.node.end(self.load);
-        Err(e)
-      }
+      hasher.write(key);
+      let code = hasher.finish() as usize;
+      let index = code % servers.len();
+      &servers[index]
     }
-  }
-  
-}
-
-
-
-
-
-impl<W: WeightedNode, F: Future>  Dispatch<W, F> {
-  pub fn make(node: W, future: F) -> Self {
-    Dispatch {load: node.start(), future, node}
-  }
-} 
-
-
-
-
-pub struct P2C<W: WeightedNode + Clone> {
-  pub inner: MemberList<W>
-}
-
-
-
-
-
-
-
-impl <W: WeightedNode + Clone> From <Vec<W::Item>> for P2C<W> {
-  
-  fn from(v: Vec<W::Item>) -> P2C<W> {
-
-    let loaded = v.into_iter().map(|inner| {
-     W::new(inner)
-    }).collect();
-    
-    let locked = RwLock::new(loaded);
-    let inner = Arc::new(locked);
-    P2C {inner} 
-  }
-
-  
-}
-
-
-
-
-
-impl<W: WeightedNode + Clone > P2C<W> {
-
-
-
-  fn dispatch<F, RV>(&self, fun: F) -> Dispatch<W, RV> 
-  where
-    RV: Future + Sized,
-    F: Fn(&W::Item) -> RV {
-    let nodes = self.inner.read().unwrap();
-    let (a, b) = (
-      rand::thread_rng().choose(&nodes).unwrap(),
-      rand::thread_rng().choose(&nodes).unwrap()
-    );
 
     
-    if a.load() >= b.load() {
-      let f = a.inner();
-      Dispatch::make(a.clone(), fun(&f) )
+  }
+
+
+
+
+
+
+
+impl <T, L> Balancer for P2C <T, L> where T: Node, L: Load  {
+  type Node = WeightedNode<T, L>;
+  type Servers = ServerList<T, L>;
+  
+  
+  fn balance(&self) -> &Self::Node {
+
+    let servers = self.servers.list(); 
+    let mut rng = thread_rng();
+    
+    let a = servers.choose(&mut rng).unwrap();
+    let b =  servers.choose(&mut rng).unwrap();
+
+
+    if a.load().load() >= b.load().load() {
+      &a
     }
 
     else {
-      
-      let f = b.inner();
-      Dispatch::make(b.clone(), fun(&f) )
+      &b
     }
     
- 
 
+  }
+  
+
+
+  fn servers(&self) -> &Self::Servers {
+    &self.servers
   }
 
 
-
+  fn servers_mut(&mut self) -> &mut Self::Servers {
+    &mut self.servers
+  }
 
   
 }
 
 
 
-type P2CLeastLoaded<T> = P2C<EwmaNode<T>>;
-
-type P2CPeakEwma<T> = P2C<CountedNode<T>>;
 
 
+
+impl <T, L> KeyedBalancer for P2C <T, L> where T: Node, L: Load {
+  type Node = WeightedNode<T, L>;
+  type Servers = ServerList<T, L>;
+
+  fn balance(&self, key: &[u8]) -> &Self::Node {
+    let hasher_a = MetroHash64::default();
+    let hasher_b = XxHash64::default();      
+
+    let a = self.hash(hasher_a, key);
+    let b = self.hash(hasher_b, key);
+
+    if a.load().load() >= b.load().load() {
+      &a
+    }
+
+    else {
+      &b 
+    }
+
+    
+  }
+
+
+
+  fn servers(&self) -> & Self::Servers {
+    &self.servers
+  }
+
+  fn servers_mut(&mut self) -> &mut Self::Servers {
+    &mut self.servers
+  }
+  
+
+
+}
 
