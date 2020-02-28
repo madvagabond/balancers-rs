@@ -6,7 +6,7 @@ use std::hash::Hasher;
 use crate::server_list::*;
 use crate::node::*;
 use crate::load::*;
-
+use super::*; 
 
 
 pub struct Ring<T, L> {
